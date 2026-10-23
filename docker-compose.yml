@@ -222,7 +222,7 @@ services:
       KAFKA_OPTS: -javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=7071:/opt/jmx/jmx-exporter.yml
     volumes: [kafka-data:/var/lib/kafka/data]
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka:29092 >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "KAFKA_OPTS= JMX_PORT= kafka-broker-api-versions --bootstrap-server kafka:29092 >/dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 30
