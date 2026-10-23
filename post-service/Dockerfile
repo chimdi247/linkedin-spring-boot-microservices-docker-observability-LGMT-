@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
  && useradd --system --uid 10001 --create-home app
 WORKDIR /app
 COPY --from=build /build/app.jar app.jar
-COPY --from=otel /opentelemetry-javaagent.jar /otel/opentelemetry-javaagent.jar
+COPY --from=otel --chmod=644 /opentelemetry-javaagent.jar /otel/opentelemetry-javaagent.jar
 USER app
 EXPOSE 8082
 # Heap is capped low on purpose: the containers are limited in docker-compose and the CPU/memory
