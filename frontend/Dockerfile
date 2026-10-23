@@ -1,7 +1,7 @@
 # ---------- build the SPA ----------
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* .npmrc ./
 RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
 COPY . .
 RUN npx vite build
