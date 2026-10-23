@@ -1,0 +1,59 @@
+# ProxySQL 2.7 - connection pooling + read/write splitting for MySQL.
+# Rendered by entrypoint.sh (placeholders __X__ come from the container environment).
+#
+# Hostgroup 10 = writer (primary)         Hostgroup 20 = readers (replica; primary only as fail-safe)
+# Splitting is done by USER, not by query rules, so it is predictable and transaction-safe:
+#   app_rw -> hostgroup 10      app_ro -> hostgroup 20
+# The services route @Transactional(readOnly = true) to app_ro (see DataSourceConfig.java).
+datadir="/var/lib/proxysql"
+errorlog="/var/lib/proxysql/proxysql.log"
+
+admin_variables=
+{
+    admin_credentials="admin:admin;radmin:__PROXYSQL_ADMIN_PASSWORD__"
+    mysql_ifaces="0.0.0.0:6032"
+    refresh_interval=2000
+    web_enabled=false
+}
+
+mysql_variables=
+{
+    threads=4
+    max_connections=2048
+    interfaces="0.0.0.0:6033"
+    server_version="8.0.40"
+    default_schema="information_schema"
+    stacksize=1048576
+    commands_stats=true
+    sessions_sort=true
+    multiplexing=true
+    connect_retries_on_failure=3
+    connect_timeout_server=3000
+    free_connections_pct=10
+    long_query_time=1000
+
+    monitor_username="proxysql_monitor"
+    monitor_password="__PROXYSQL_MONITOR_PASSWORD__"
+    monitor_connect_interval=5000
+    monitor_ping_interval=5000
+    monitor_read_only_interval=2000
+    ping_timeout_server=500
+    poll_timeout=2000
+}
+
+mysql_servers=
+(
+    { address="mysql-primary", port=3306, hostgroup=10, max_connections=100, weight=1000, comment="primary (writer)" },
+    { address="mysql-replica", port=3306, hostgroup=20, max_connections=100, weight=1000, comment="replica (reader)" },
+    { address="mysql-primary", port=3306, hostgroup=20, max_connections=20,  weight=1,    comment="primary as reader fail-safe" }
+)
+
+mysql_users=
+(
+    { username="app_rw", password="__APP_RW_PASSWORD__", default_hostgroup=10, transaction_persistent=1, max_connections=400, active=1 },
+    { username="app_ro", password="__APP_RO_PASSWORD__", default_hostgroup=20, transaction_persistent=1, max_connections=400, active=1 }
+)
+
+mysql_query_rules=
+(
+)

@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cloud:
+    gateway:
+      # Client supplied identity headers are dropped on every route (public ones included);
+      # JwtAuthFilter then sets the trusted values on protected routes.
+      default-filters:
+        - RemoveRequestHeader=X-User-Id
+        - RemoveRequestHeader=X-User-Email
+      httpclient:
+        connect-timeout: 3000
+        response-timeout: 30s
+      routes:
+
+        # Auth routes - NO JWT validation required
+        - id: user-service-auth
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/auth/**
+
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: post-service
+          uri: ${POST_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/posts/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: feed-service
+          uri: ${FEED_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/feed/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: search-service
+          uri: ${SEARCH_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/search/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - name: JwtAuthFilter
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: 8080
+  shutdown: graceful
+
+# base64 HS256 secret shared with user-service (jwt.secret there). Override via JWT_SECRET.
+jwt:
+  secret-key: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: false   # the gateway does not use Redis yet; do not let it decide readiness
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{trace_id:-},%X{span_id:-}]"

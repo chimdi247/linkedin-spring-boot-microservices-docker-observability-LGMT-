@@ -1,0 +1,77 @@
+apiVersion: 1
+
+# Metrics -> Mimir, Logs -> Loki, Traces -> Tempo, with cross links:
+#   metric exemplar -> trace   |  log line (trace_id) -> trace  |  span -> its logs / metrics  |  service map
+deleteDatasources:
+  - { name: Mimir, orgId: 1 }
+
+datasources:
+  - name: Mimir
+    uid: mimir
+    type: prometheus
+    access: proxy
+    url: http://mimir:9009/prometheus
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      prometheusType: Mimir
+      timeInterval: 15s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      # Clicking the "TraceID" link on a log line opens the full trace + spans in Tempo.
+      # `trace_id` is OTLP structured metadata on every log record written inside a span.
+      derivedFields:
+        - name: TraceID
+          matcherType: label
+          matcherRegex: trace_id
+          url: '$${__value.raw}'
+          datasourceUid: tempo
+          urlDisplayLabel: View trace in Tempo
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      httpMethod: GET
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      serviceMap:
+        datasourceUid: mimir
+      streamingEnabled:
+        search: true
+      tracesToLogsV2:            # span -> the logs written during that span
+        datasourceUid: loki
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        filterByTraceID: true
+        filterBySpanID: false
+        customQuery: false
+        tags:
+          - { key: service.name, value: service_name }
+      tracesToMetrics:           # span -> RED metrics of the service
+        datasourceUid: mimir
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        tags:
+          - { key: service.name, value: service_name }
+        queries:
+          - name: Request rate
+            query: 'sum(rate(http_server_request_duration_seconds_count{$$__tags}[5m]))'
+          - name: p95 latency
+            query: 'histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{$$__tags}[5m])))'

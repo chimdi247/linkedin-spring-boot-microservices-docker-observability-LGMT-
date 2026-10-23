@@ -1,0 +1,75 @@
+# Prometheus JMX exporter rules for a Kafka broker (KRaft combined mode).
+# Names are explicit on purpose - the Kafka dashboard queries them:
+#   kafka_server_replicamanager_{underreplicatedpartitions,underminisrpartitioncount,partitioncount,leadercount}
+#   kafka_controller_kafkacontroller_{offlinepartitionscount,activecontrollercount,globaltopiccount,globalpartitioncount}
+#   kafka_server_brokertopicmetrics_{messagesinpersec,bytesinpersec,bytesoutpersec,...}_total
+#   kafka_network_requestmetrics_totaltimems{request,quantile}, kafka_network_requestmetrics_requestspersec_total{request}
+#   kafka_server_kafkaserver_brokerstate, kafka_log_log_size{topic,partition}
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+whitelistObjectNames:
+  - kafka.server:type=ReplicaManager,*
+  - kafka.server:type=BrokerTopicMetrics,*
+  - kafka.server:type=KafkaServer,name=BrokerState
+  - kafka.server:type=ReplicaFetcherManager,*
+  - kafka.controller:type=KafkaController,*
+  - kafka.network:type=RequestMetrics,*
+  - kafka.network:type=RequestChannel,*
+  - kafka.network:type=SocketServer,*
+  - kafka.log:type=Log,name=Size,*
+  - kafka.log:type=LogFlushStats,*
+  - kafka.server:type=Request,*
+  - java.lang:*
+rules:
+  - pattern: 'kafka.server<type=ReplicaManager, name=(UnderReplicatedPartitions|UnderMinIsrPartitionCount|PartitionCount|LeaderCount|OfflineReplicaCount)><>Value'
+    name: kafka_server_replicamanager_$1
+    type: GAUGE
+  - pattern: 'kafka.server<type=ReplicaManager, name=(IsrShrinksPerSec|IsrExpandsPerSec)><>Count'
+    name: kafka_server_replicamanager_$1_total
+    type: COUNTER
+  - pattern: 'kafka.controller<type=KafkaController, name=(OfflinePartitionsCount|ActiveControllerCount|GlobalTopicCount|GlobalPartitionCount|PreferredReplicaImbalanceCount)><>Value'
+    name: kafka_controller_kafkacontroller_$1
+    type: GAUGE
+  - pattern: 'kafka.server<type=KafkaServer, name=BrokerState><>Value'
+    name: kafka_server_kafkaserver_brokerstate
+    type: GAUGE
+  - pattern: 'kafka.server<type=BrokerTopicMetrics, name=(MessagesInPerSec|BytesInPerSec|BytesOutPerSec|BytesRejectedPerSec|TotalProduceRequestsPerSec|TotalFetchRequestsPerSec|FailedProduceRequestsPerSec|FailedFetchRequestsPerSec)><>Count'
+    name: kafka_server_brokertopicmetrics_$1_total
+    type: COUNTER
+  - pattern: 'kafka.network<type=RequestMetrics, name=(TotalTimeMs|RequestQueueTimeMs|LocalTimeMs|RemoteTimeMs|ResponseQueueTimeMs), request=(Produce|FetchConsumer|FetchFollower)><>(50thPercentile|95thPercentile|99thPercentile|Mean)'
+    name: kafka_network_requestmetrics_$1
+    type: GAUGE
+    labels:
+      request: "$2"
+      quantile: "$3"
+  - pattern: 'kafka.network<type=RequestMetrics, name=RequestsPerSec, request=(.+), version=(.+)><>Count'
+    name: kafka_network_requestmetrics_requestspersec_total
+    type: COUNTER
+    labels:
+      request: "$1"
+  - pattern: 'kafka.network<type=RequestChannel, name=(RequestQueueSize|ResponseQueueSize)><>Value'
+    name: kafka_network_requestchannel_$1
+    type: GAUGE
+  - pattern: 'kafka.network<type=SocketServer, name=NetworkProcessorAvgIdlePercent><>Value'
+    name: kafka_network_socketserver_networkprocessoravgidlepercent
+    type: GAUGE
+  - pattern: 'kafka.log<type=Log, name=Size, topic=(.+), partition=(.+)><>Value'
+    name: kafka_log_log_size
+    type: GAUGE
+    labels:
+      topic: "$1"
+      partition: "$2"
+  - pattern: 'kafka.log<type=LogFlushStats, name=LogFlushRateAndTimeMs><>(Count)'
+    name: kafka_log_logflushstats_flushes_total
+    type: COUNTER
+  - pattern: 'java.lang<type=Memory><(.+)MemoryUsage>(.+)'
+    name: jvm_memory_usage_$1_$2
+    type: GAUGE
+  - pattern: 'java.lang<type=OperatingSystem><>(ProcessCpuLoad|SystemCpuLoad|OpenFileDescriptorCount)'
+    name: kafka_jvm_os_$1
+    type: GAUGE
+  - pattern: 'java.lang<type=GarbageCollector, name=(.+)><>CollectionTime'
+    name: kafka_jvm_gc_collection_time_ms_total
+    type: COUNTER
+    labels:
+      gc: "$1"

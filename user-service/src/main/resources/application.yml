@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: user-service
+  datasource:
+    # Primary (writes) - through ProxySQL writer hostgroup in docker; overridable via env
+    url: ${DB_URL:jdbc:mysql://localhost:3306/user_db?createDatabaseIfNotExist=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}   # docker sets "none": tables come from docker/mysql/init/01-schema.sql
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+app:
+  datasource:
+    read:
+      # empty => single pool. In docker: ProxySQL with the read-only user (replica hostgroup)
+      url: ${DB_READ_URL:}
+      username: ${DB_READ_USERNAME:}
+      password: ${DB_READ_PASSWORD:}
+
+server:
+  port: 8081
+  shutdown: graceful
+
+# JWT Configuration (base64 encoded HS256 secret, >= 32 bytes). Override in every real environment.
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  expiration: 86400000          # 24 hours - access token
+  refresh-expiration: 604800000 # 7 days - refresh token
+
+# S3 (AWS in production, MinIO locally via aws.s3.endpoint)
+aws:
+  access-key: ${AWS_ACCESS_KEY:YOUR_ACCESS_KEY}
+  secret-key: ${AWS_SECRET_KEY:YOUR_SECRET_KEY}
+  region: ${AWS_REGION:eu-north-1}
+  s3:
+    bucket-name: ${S3_BUCKET:YOUR_BUCKET_NAME}
+    endpoint: ${S3_ENDPOINT:}
+    public-url: ${S3_PUBLIC_URL:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    # trace_id/span_id are put into the MDC by the OpenTelemetry Java agent
+    level: "%5p [${spring.application.name:},%X{trace_id:-},%X{span_id:-}]"

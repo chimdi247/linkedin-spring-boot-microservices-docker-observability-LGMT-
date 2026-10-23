@@ -1,0 +1,51 @@
+// Grafana Alloy - ships the stdout/stderr logs of the INFRASTRUCTURE containers (mysql, kafka, redis,
+// proxysql, minio, elasticsearch, nginx, ...) to Loki. The six Java services and the SPA export their logs
+// over OTLP (with trace_id / span_id) so they are skipped here (compose label obs.logs=otlp).
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // skip containers whose logs already travel over OTLP
+  rule {
+    source_labels = ["__meta_docker_container_label_obs_logs"]
+    regex         = "otlp"
+    action        = "drop"
+  }
+  // only this compose project
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = ".+"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service_name"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  rule {
+    target_label = "deployment_environment"
+    replacement  = "local"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.write.default.receiver]
+  refresh_interval = "10s"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,0 +1,77 @@
+# Grafana Mimir - monolithic mode (-target=all), blocks stored in S3 (MinIO locally, AWS S3 in production).
+# Scale out later by running more replicas with the same config + a memberlist/consul ring instead of "inmemory",
+# and by pointing S3_ENDPOINT at AWS (drop `insecure`, set the real region). Expanded with -config.expand-env=true.
+target: all
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+  log_level: warn
+
+common:
+  storage:
+    backend: s3
+    s3:
+      endpoint: ${S3_ENDPOINT}
+      region: ${S3_REGION}
+      access_key_id: ${S3_ACCESS_KEY}
+      secret_access_key: ${S3_SECRET_KEY}
+      insecure: true
+
+blocks_storage:
+  s3:
+    bucket_name: mimir-blocks
+  tsdb:
+    dir: /data/tsdb
+    retention_period: 24h          # local copy only; long term data lives in S3
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+
+ruler_storage:
+  s3:
+    bucket_name: mimir-ruler
+
+alertmanager_storage:
+  s3:
+    bucket_name: mimir-alertmanager
+
+alertmanager:
+  data_dir: /data/alertmanager
+  external_url: http://localhost:9009/alertmanager
+
+ruler:
+  rule_path: /data/ruler
+
+compactor:
+  data_dir: /data/compactor
+  sharding_ring:
+    kvstore:
+      store: inmemory
+
+distributor:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
+ingester:
+  ring:
+    instance_addr: 127.0.0.1
+    replication_factor: 1
+    kvstore:
+      store: inmemory
+
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+    kvstore:
+      store: inmemory
+
+limits:
+  compactor_blocks_retention_period: 30d
+  max_global_series_per_user: 0
+  ingestion_rate: 50000
+  ingestion_burst_size: 500000
+  max_global_exemplars_per_user: 100000   # exemplars: metric point -> trace
+  out_of_order_time_window: 5m

@@ -1,0 +1,163 @@
+apiVersion: 1
+
+# Grafana-managed alerting (not Prometheus/Mimir ruler): rules are evaluated by Grafana, notifications go
+# out through the SMTP server configured with GF_SMTP_* (Mailpit UI: http://localhost:8025 by default).
+# All four rules fire when usage stays above 40 % for 2 minutes.
+
+contactPoints:
+  - orgId: 1
+    name: email-alerts
+    receivers:
+      - uid: email-alerts-1
+        type: email
+        settings:
+          addresses: ${ALERT_EMAIL_TO}
+          singleEmail: true
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: email-alerts
+    group_by: [alertname, container]
+    group_wait: 30s
+    group_interval: 2m
+    repeat_interval: 4h
+
+groups:
+  - orgId: 1
+    name: resource-usage-40pct
+    folder: LinkedIn Alerts
+    interval: 1m
+    rules:
+      - uid: alert-container-cpu
+        title: Container CPU above 40%
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning, kind: cpu, scope: container }
+        annotations:
+          summary: "Container {{ $$labels.container }} CPU is {{ printf \"%.0f\" $$values.B.Value }}% of its limit (> 40%)"
+          description: "CPU usage of {{ $$labels.container }} has been above 40% of its CPU limit for 2 minutes."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: mimir
+            model:
+              refId: A
+              instant: true
+              range: false
+              expr: >-
+                100 * sum by (container) (label_replace(rate(container_cpu_usage_seconds_total{name=~"${ALERT_CONTAINER_REGEX}"}[2m]), "container", "$$1", "name", "(.+)"))
+                / sum by (container) (label_replace(container_spec_cpu_quota{name=~"${ALERT_CONTAINER_REGEX}"} > 0, "container", "$$1", "name", "(.+)")
+                / label_replace(container_spec_cpu_period{name=~"${ALERT_CONTAINER_REGEX}"}, "container", "$$1", "name", "(.+)"))
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{ evaluator: { type: gt, params: [40] } }]
+
+      - uid: alert-container-memory
+        title: Container memory above 40%
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning, kind: memory, scope: container }
+        annotations:
+          summary: "Container {{ $$labels.container }} memory is {{ printf \"%.0f\" $$values.B.Value }}% of its limit (> 40%)"
+          description: "Working-set memory of {{ $$labels.container }} has been above 40% of its memory limit for 2 minutes."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: mimir
+            model:
+              refId: A
+              instant: true
+              range: false
+              expr: >-
+                100 * label_replace(container_memory_working_set_bytes{name=~"${ALERT_CONTAINER_REGEX}"}, "container", "$$1", "name", "(.+)")
+                / (label_replace(container_spec_memory_limit_bytes{name=~"${ALERT_CONTAINER_REGEX}"} > 0, "container", "$$1", "name", "(.+)"))
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{ evaluator: { type: gt, params: [40] } }]
+
+      - uid: alert-node-cpu
+        title: Node CPU above 40%
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning, kind: cpu, scope: node }
+        annotations:
+          summary: "Node CPU is {{ printf \"%.0f\" $$values.B.Value }}% (> 40%)"
+          description: "Host CPU utilisation has been above 40% for 2 minutes."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: mimir
+            model:
+              refId: A
+              instant: true
+              range: false
+              expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100)
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{ evaluator: { type: gt, params: [40] } }]
+
+      - uid: alert-node-memory
+        title: Node memory above 40%
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning, kind: memory, scope: node }
+        annotations:
+          summary: "Node memory is {{ printf \"%.0f\" $$values.B.Value }}% (> 40%)"
+          description: "Host memory utilisation (excluding reclaimable cache) has been above 40% for 2 minutes."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: mimir
+            model:
+              refId: A
+              instant: true
+              range: false
+              expr: 100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{ evaluator: { type: gt, params: [40] } }]

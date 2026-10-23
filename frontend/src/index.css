@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --color-brand-50: #eaf3fc;
+  --color-brand-100: #d3e6f9;
+  --color-brand-500: #2f80d1;
+  --color-brand-600: #0a66c2;
+  --color-brand-700: #004182;
+  --color-canvas: #f3f2ef;
+  --color-ink: #191919;
+  --color-muted: #666666;
+  --shadow-card: 0 0 0 1px rgb(0 0 0 / 0.08), 0 2px 4px rgb(0 0 0 / 0.03);
+  --animate-toast-in: toast-in 0.2s ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+html, body, #root { min-height: 100%; }
+body { background: var(--color-canvas); color: var(--color-ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+@layer components {
+  .card { @apply rounded-xl bg-white shadow-card; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600; }
+  .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700; }
+  .btn-outline { @apply btn border border-brand-600 text-brand-600 hover:bg-brand-50; }
+  .btn-ghost { @apply btn text-muted hover:bg-black/5; }
+  .input { @apply w-full rounded-lg border border-black/30 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25; }
+  .label { @apply mb-1 block text-sm font-medium text-muted; }
+}

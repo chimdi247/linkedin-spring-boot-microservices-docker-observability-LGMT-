@@ -1,0 +1,13 @@
+{
+  "name": "linkedin-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "open": "cypress open",
+    "test": "cypress run",
+    "test:headed": "cypress run --headed"
+  },
+  "devDependencies": {
+    "cypress": "13.17.0"
+  }
+}

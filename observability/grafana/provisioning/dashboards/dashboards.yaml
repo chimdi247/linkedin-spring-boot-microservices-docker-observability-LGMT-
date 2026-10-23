@@ -1,0 +1,12 @@
+apiVersion: 1
+providers:
+  - name: linkedin-system
+    orgId: 1
+    folder: LinkedIn System
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
